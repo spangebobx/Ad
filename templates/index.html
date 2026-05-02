@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adopt Me Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar for cookie input -->
+            <div class="col-md-3 sidebar">
+                <h3 class="mt-4">Cookies</h3>
+                <textarea id="cookieInput" class="form-control" rows="15" placeholder="Paste .ROBLOSECURITY cookies here (one per line)"></textarea>
+                <button id="scanBtn" class="btn btn-primary w-100 mt-3">Start Scan</button>
+                <div id="status" class="mt-3 text-center"></div>
+            </div>
+            
+            <!-- Main dashboard -->
+            <div class="col-md-9 main-content">
+                <h2 class="mt-4 mb-4">Adopt Me Inventory Dashboard</h2>
+                <div id="accountsContainer" class="row">
+                    <!-- Account cards will be injected here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const scanBtn = document.getElementById('scanBtn');
+        const cookieInput = document.getElementById('cookieInput');
+        const status = document.getElementById('status');
+        const container = document.getElementById('accountsContainer');
+
+        scanBtn.addEventListener('click', async () => {
+            const cookies = cookieInput.value.split('\n').filter(c => c.trim());
+            
+            if (cookies.length === 0) {
+                status.innerHTML = '<span class="text-danger">No cookies provided</span>';
+                return;
+            }
+
+            status.innerHTML = '<span class="text-info">Scanning...</span>';
+            container.innerHTML = '';
+
+            // Submit cookies
+            await fetch('/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({cookies})
+            });
+
+            // Poll for results
+            const interval = setInterval(async () => {
+                const resp = await fetch('/results');
+                const results = await resp.json();
+
+                if (results.length > 0) {
+                    renderResults(results);
+                    status.innerHTML = `<span class="text-success">Loaded ${results.length} accounts</span>`;
+                }
+
+                if (results.length === cookies.length) {
+                    clearInterval(interval);
+                }
+            }, 2000);
+        });
+
+        function renderResults(results) {
+            container.innerHTML = '';
+            
+            results.forEach(account => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 mb-4';
+                
+                if (account.error) {
+                    card.innerHTML = `
+                        <div class="card border-danger">
+                            <div class="card-body">
+                                <h5 class="card-title text-danger">Error</h5>
+                                <p>${account.error}</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const petsHtml = account.pets.map(pet => `
+                        <tr>
+                            <td>${pet.name}</td>
+                            <td>${pet.quantity}</td>
+                            <td>${pet.value.toFixed(2)}</td>
+                            <td><strong>${pet.total.toFixed(2)}</strong></td>
+                        </tr>
+                    `).join('');
+                    
+                    card.innerHTML = `
+                        <div class="card account-card">
+                            <div class="card-header">
+                                <h5>${account.username}</h5>
+                                <span class="badge bg-success">Total Value: ${account.total_value.toFixed(2)}</span>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Pet</th>
+                                            <th>Qty</th>
+                                            <th>Value</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${petsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                container.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
