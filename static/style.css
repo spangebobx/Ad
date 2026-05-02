@@ -1,105 +1,119 @@
-:root {
-    --primary: #6366f1;
-    --secondary: #8b5cf6;
-    --success: #10b981;
-    --danger: #ef4444;
-    --dark: #1f2937;
-    --light: #f3f4f6;
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adopt Me Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-3 sidebar">
+                <h3 class="mt-4">Cookies</h3>
+                <textarea id="cookieInput" class="form-control" rows="15" placeholder="Paste .ROBLOSECURITY cookies (one per line, max 10)"></textarea>
+                <button id="scanBtn" class="btn btn-primary w-100 mt-3">Start Scan</button>
+                <div id="status" class="mt-3 text-center"></div>
+            </div>
+            
+            <div class="col-md-9 main-content">
+                <h2 class="mt-4 mb-4">Adopt Me Inventory Dashboard</h2>
+                <div id="accountsContainer" class="row"></div>
+            </div>
+        </div>
+    </div>
 
-body {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
+    <script>
+        const scanBtn = document.getElementById('scanBtn');
+        const cookieInput = document.getElementById('cookieInput');
+        const status = document.getElementById('status');
+        const container = document.getElementById('accountsContainer');
 
-.sidebar {
-    background: white;
-    min-height: 100vh;
-    padding: 20px;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-}
+        scanBtn.addEventListener('click', async () => {
+            const cookies = cookieInput.value.split('\n').filter(c => c.trim()).slice(0, 10);
+            
+            if (cookies.length === 0) {
+                status.innerHTML = '<span class="text-danger">No cookies provided</span>';
+                return;
+            }
 
-.sidebar h3 {
-    color: var(--primary);
-    font-weight: 600;
-}
+            status.innerHTML = '<span class="text-info">Scanning...</span>';
+            container.innerHTML = '<div class="col-12 text-center"><div class="spinner-border text-light mt-5" role="status"></div></div>';
+            scanBtn.disabled = true;
 
-.main-content {
-    padding: 20px;
-}
+            try {
+                const resp = await fetch('/api/scan', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({cookies})
+                });
 
-.main-content h2 {
-    color: white;
-    font-weight: 700;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-}
+                const results = await resp.json();
+                renderResults(results);
+                status.innerHTML = `<span class="text-success">Loaded ${results.length} accounts</span>`;
+            } catch (error) {
+                status.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
+                container.innerHTML = '';
+            } finally {
+                scanBtn.disabled = false;
+            }
+        });
 
-#cookieInput {
-    border: 2px solid var(--primary);
-    border-radius: 8px;
-    font-family: 'Courier New', monospace;
-    font-size: 12px;
-}
-
-#scanBtn {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    border: none;
-    padding: 12px;
-    font-weight: 600;
-    border-radius: 8px;
-    transition: transform 0.2s;
-}
-
-#scanBtn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
-}
-
-.account-card {
-    border: none;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    transition: transform 0.2s;
-}
-
-.account-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-}
-
-.account-card .card-header {
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: white;
-    border-radius: 12px 12px 0 0 !important;
-    padding: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.account-card .card-header h5 {
-    margin: 0;
-    font-weight: 600;
-}
-
-.table {
-    margin-bottom: 0;
-}
-
-.table thead {
-    background: var(--light);
-    font-weight: 600;
-    color: var(--dark);
-}
-
-.badge {
-    padding: 8px 12px;
-    font-size: 14px;
-}
-
-#status {
-    font-weight: 500;
-    padding: 10px;
-    border-radius: 6px;
-}
+        function renderResults(results) {
+            container.innerHTML = '';
+            
+            results.forEach(account => {
+                const card = document.createElement('div');
+                card.className = 'col-md-6 mb-4';
+                
+                if (account.error) {
+                    card.innerHTML = `
+                        <div class="card border-danger">
+                            <div class="card-body">
+                                <h5 class="card-title text-danger">Error</h5>
+                                <p>${account.error}</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    const petsHtml = account.pets.length > 0 
+                        ? account.pets.map(pet => `
+                            <tr>
+                                <td>${pet.matched_name || pet.name}</td>
+                                <td>${pet.quantity}</td>
+                                <td>${pet.value.toFixed(2)}</td>
+                                <td><strong>${pet.total.toFixed(2)}</strong></td>
+                            </tr>
+                        `).join('')
+                        : '<tr><td colspan="4" class="text-center text-muted">No pets valued 5+</td></tr>';
+                    
+                    card.innerHTML = `
+                        <div class="card account-card">
+                            <div class="card-header">
+                                <h5>${account.username}</h5>
+                                <span class="badge bg-success">Total: ${account.total_value.toFixed(2)}</span>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Pet</th>
+                                            <th>Qty</th>
+                                            <th>Value</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${petsHtml}</tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                container.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
